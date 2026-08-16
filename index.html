@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="app-header">
+      <h1>♞ Chess</h1>
+      <div id="status" class="status" role="status" aria-live="polite">White to move</div>
+    </header>
+
+    <div class="game-area">
+      <div class="board-wrap">
+        <div id="board" class="board" aria-label="Chess board"></div>
+        <div id="promo-dialog" class="promo-dialog hidden" role="dialog" aria-label="Choose promotion piece">
+          <div class="promo-inner">
+            <p>Promote to:</p>
+            <div id="promo-choices" class="promo-choices"></div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="sidebar">
+        <div class="panel captured-panel">
+          <div class="captured-row" id="captured-by-white">
+            <span class="captured-label">White captured:</span>
+            <span class="captured-pieces" data-side="w"></span>
+          </div>
+          <div class="captured-row" id="captured-by-black">
+            <span class="captured-label">Black captured:</span>
+            <span class="captured-pieces" data-side="b"></span>
+          </div>
+        </div>
+
+        <div class="panel history-panel">
+          <h2>Moves</h2>
+          <ol id="history" class="history"></ol>
+        </div>
+
+        <div class="panel controls-panel">
+          <div class="controls">
+            <button id="btn-new-game" class="btn">New Game</button>
+            <button id="btn-undo" class="btn">Undo</button>
+            <button id="btn-resign" class="btn">Resign</button>
+            <button id="btn-flip" class="btn">Flip Board</button>
+          </div>
+          <div class="controls">
+            <label class="ai-label">
+              Opponent:
+              <select id="ai-select">
+                <option value="off" selected>Human</option>
+                <option value="easy">AI – Easy</option>
+                <option value="medium">AI – Medium</option>
+                <option value="hard">AI – Hard</option>
+              </select>
+            </label>
+            <label class="ai-label">
+              Time:
+              <select id="timer-select">
+                <option value="off" selected>Off</option>
+                <option value="300">5 min</option>
+                <option value="600">10 min</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <script src="js/game.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>
