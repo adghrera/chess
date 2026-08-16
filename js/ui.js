@@ -197,6 +197,9 @@ function handleSquareClick(row, col) {
           state.makeMove(move);
           uiSelectedSquare = null;
           renderBoard();
+          if (state.isGameOver()) {
+            showGameResult(state.isInCheck(state.getActiveColor()) ? 'checkmate' : 'stalemate');
+          }
         });
         return;
       }
@@ -204,6 +207,9 @@ function handleSquareClick(row, col) {
       state.makeMove(move);
       uiSelectedSquare = null;
       renderBoard();
+      if (state.isGameOver()) {
+        showGameResult(state.isInCheck(state.getActiveColor()) ? 'checkmate' : 'stalemate');
+      }
       return;
     }
 
