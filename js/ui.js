@@ -20,6 +20,8 @@ const DOM = {
 
 // UI state - only what's needed for rendering
 let uiSelectedSquare = null; // {row, col} - selected piece location
+let aiMode = 'off'; // 'off', 'easy', 'medium', 'hard'
+let aiColor = 'b'; // AI plays as black by default
 
 // Piece symbols (Unicode)
 const UI_PIECE_SYMBOLS = {
@@ -166,6 +168,9 @@ function handleSquareClick(row, col) {
 
   if (isGameOver()) return;
 
+  // Block player from moving AI's pieces
+  if (aiMode !== 'off' && getActiveColor() === aiColor) return;
+
   // Get the piece at clicked square
   const board = state.getBoard();
   const piece = board[row][col];
@@ -199,6 +204,8 @@ function handleSquareClick(row, col) {
           renderBoard();
           if (state.isGameOver()) {
             showGameResult(state.isInCheck(state.getActiveColor()) ? 'checkmate' : 'stalemate');
+          } else {
+            triggerAIMove();
           }
         });
         return;
@@ -209,6 +216,8 @@ function handleSquareClick(row, col) {
       renderBoard();
       if (state.isGameOver()) {
         showGameResult(state.isInCheck(state.getActiveColor()) ? 'checkmate' : 'stalemate');
+      } else {
+        triggerAIMove();
       }
       return;
     }
@@ -305,6 +314,25 @@ function flipBoard() {
   renderBoard();
 }
 
+// Trigger AI move if AI is enabled and it's AI's turn
+function triggerAIMove() {
+  if (aiMode === 'off') return;
+  if (window.ChessGame.getActiveColor() !== aiColor) return;
+  if (window.ChessGame.isGameOver()) return;
+
+  // Small delay for visual feedback
+  setTimeout(() => {
+    const move = window.ChessAI.getBestMove(aiColor, aiMode);
+    if (move) {
+      window.ChessGame.makeMove(move);
+      renderBoard();
+      if (window.ChessGame.isGameOver()) {
+        showGameResult(window.ChessGame.isInCheck(window.ChessGame.getActiveColor()) ? 'checkmate' : 'stalemate');
+      }
+    }
+  }, 150);
+}
+
 // Setup event listeners for UI controls
 function setupEventListeners() {
   DOM.newGameBtn.addEventListener('click', newGame);
@@ -316,6 +344,20 @@ function setupEventListeners() {
     }
   });
   DOM.flipBtn.addEventListener('click', flipBoard);
+  
+  // AI mode selection
+  DOM.aiSelect.addEventListener('change', (e) => {
+    aiMode = e.target.value;
+    // Start a new game when changing AI mode
+    if (aiMode !== 'off') {
+      if (confirm('Start a new game with AI?')) {
+        newGame();
+      } else {
+        e.target.value = 'off';
+        aiMode = 'off';
+      }
+    }
+  });
   
   // Close promotion dialog when clicking outside
   DOM.promoDialog.addEventListener('click', (e) => {
