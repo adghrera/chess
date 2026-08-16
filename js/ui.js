@@ -21,6 +21,12 @@ const DOM = {
 // UI state - only what's needed for rendering
 let selectedSquare = null; // {row, col} - selected piece location
 
+// Piece symbols (Unicode)
+const PIECE_SYMBOLS = {
+  w: { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙' },
+  b: { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' }
+};
+
 // Get active color from game state
 function getActiveColor() {
   return window.ChessGame.getActiveColor();
@@ -85,7 +91,7 @@ function renderBoard() {
     rankLabel.textContent = 8 - rIdx;
     rankLabel.style.position = 'absolute';
     rankLabel.style.left = '0';
-    rankLabel.style.top = `${r * var(--square-size)}px`;
+    rankLabel.style.top = `${r * parseInt(getComputedStyle(document.documentElement).getPropertyValue('--square-size'))}px`;
     rankLabel.style.width = 'var(--square-size)';
     rankLabel.style.height = 'var(--square-size)';
     rankLabel.style.display = 'flex';
@@ -178,25 +184,56 @@ function handleSquareClick(row, col) {
     // Generate legal moves for the active color and find moves from selected square
     const legalMoves = state.generateLegalMoves(getActiveColor());
     const myMoves = legalMoves.filter(m =>
-      m.from.row === fromRow && m.from.col === fromCol
+      m.from.row === fromRow && m.from.col === fromCol && m.to.row === row && m.to.col === col
     );
 
     if (myMoves.length > 0) {
-      // Make the first legal move from the selected square
       const move = myMoves[0];
+      
+      // Check if promotion is needed
+      if (move.flags?.promotion) {
+        showPromotionDialog(move, (promotionPiece) => {
+          move.flags.promotionPiece = promotionPiece;
+          state.makeMove(move);
+          selectedSquare = null;
+          renderBoard();
+        });
+        return;
+      }
+      
       state.makeMove(move);
-      // renderBoard() will handle game end detection via the gameOver flag
-      renderBoard();
-
-      // selectedSquare is reset inside renderBoard or we clear it here
       selectedSquare = null;
+      renderBoard();
       return;
     }
 
-    // No legal moves from this square - deselect
-    selectedSquare = null;
+    // No legal moves from this square - deselect or select new piece
+    if ((getActiveColor() === 'w' && piece > 0) || (getActiveColor() === 'b' && piece < 0)) {
+      selectedSquare = { row, col };
+    } else {
+      selectedSquare = null;
+    }
     renderBoard();
   }
+}
+
+// Show promotion dialog
+function showPromotionDialog(move, callback) {
+  const color = getActiveColor();
+  const pieces = ['Q', 'R', 'B', 'N'];
+  
+  DOM.promoChoices.innerHTML = '';
+  DOM.promoDialog.classList.remove('hidden');
+  
+  pieces.forEach(piece => {
+    const btn = document.createElement('button');
+    btn.textContent = PIECE_SYMBOLS[color][piece];
+    btn.onclick = () => {
+      DOM.promoDialog.classList.add('hidden');
+      callback(piece);
+    };
+    DOM.promoChoices.appendChild(btn);
+  });
 }
 
 // Show game result (checkmate or stalemate)
@@ -224,6 +261,11 @@ function showGameResult(result) {
     selectedSquare = null;
     renderBoard();
   }
+}
+
+// Hide promotion dialog
+function hidePromotionDialog() {
+  DOM.promoDialog.classList.add('hidden');
 }
 
 // New game - reset everything
@@ -268,10 +310,23 @@ function setupEventListeners() {
     }
   });
   DOM.flipBtn.addEventListener('click', flipBoard);
+  
+  // Close promotion dialog when clicking outside
+  DOM.promoDialog.addEventListener('click', (e) => {
+    if (e.target === DOM.promoDialog) {
+      hidePromotionDialog();
+    }
+  });
 }
 
 // Initialize the game when the page loads
 document.addEventListener('DOMContentLoaded', () => {
   newGame();
   setupEventListeners();
-}
+});
+
+// Expose functions for external use
+window.ChessUI = {
+  renderBoard,
+  hidePromotionDialog
+};

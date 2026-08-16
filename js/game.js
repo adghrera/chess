@@ -579,7 +579,8 @@ function getKingMoves(row, col, color, boardRef) {
     // Kingside: rook at column 7
     if (!hasMoved[`${color}R`]?.k && boardRef[row][7] !== 0 && Math.abs(boardRef[row][7]) === ROOK) {
       if (boardRef[row][5] === 0 && boardRef[row][6] === 0) {
-        if (!leavesKingInCheck(row, col, row, 6, color)) {
+        // Check that king doesn't pass through check
+        if (!leavesKingInCheck(row, col, row, 5, color) && !leavesKingInCheck(row, col, row, 6, color)) {
           moves.push({ toRow: row, toCol: 6, flags: { castling: 'k' } });
         }
       }
@@ -587,7 +588,8 @@ function getKingMoves(row, col, color, boardRef) {
     // Queenside: rook at column 0
     if (!hasMoved[`${color}R`]?.q && boardRef[row][0] !== 0 && Math.abs(boardRef[row][0]) === ROOK) {
       if (boardRef[row][1] === 0 && boardRef[row][2] === 0 && boardRef[row][3] === 0) {
-        if (!leavesKingInCheck(row, col, row, 2, color)) {
+        // Check that king doesn't pass through check
+        if (!leavesKingInCheck(row, col, row, 3, color) && !leavesKingInCheck(row, col, row, 2, color)) {
           moves.push({ toRow: row, toCol: 2, flags: { castling: 'q' } });
         }
       }
@@ -649,69 +651,60 @@ function checkGameEnd(color) {
 // Make a move on the board
 function makeMove(move) {
   const { from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol }, pieceType, captured, flags } = move;
+  const pieceValue = activeColor === 'w' ? pieceType : -pieceType;
 
-  // Store last move for en passant
+  // Store last move for en passant and castling
   lastMove = {
     fromRow, fromCol, toRow, toCol,
     enPassant: !!flags?.enPassant,
-    pieceType
+    enPassantCol: flags?.enPassant ? toCol : null,
+    pieceType,
+    castling: flags?.castling || null,
+    capturedPiece: captured
   };
 
   // Handle castling
   if (flags?.castling) {
     if (flags.castling === 'k') {
       // Kingside: rook moves from h1/h8 to f1/f8
-      const rookOriginalCol = 7;
-      const rookNewCol = toCol - 1; // f-file is col 5, rook goes to g5 (col 6->5... wait)
-      // Let me think about this more carefully
-      // Kingside castling: king moves 2 squares toward rook
       // White kingside: king from e1 (0,4) to g1 (0,6), rook from h1 (0,7) to f1 (0,5)
       // Black kingside: king from e8 (7,4) to g8 (7,6), rook from h8 (7,7) to f8 (7,5)
-
-      // Move rook from h1/h8 to f1/f8
       board[toRow][5] = board[toRow][7]; // rook to f square
       board[toRow][7] = 0; // clear h square
-
       // Move king from e1/e8 to g1/g8
-      board[toRow][6] = board[fromRow][fromCol]; // king to g square
+      board[toRow][6] = pieceValue; // king to g square
       board[fromRow][fromCol] = 0; // clear e square
-
       hasMoved[`${activeColor}K`] = true;
       hasMoved[`${activeColor}R`].k = true;
     } else if (flags.castling === 'q') {
       // Queenside castling: king moves 2 squares toward queenside rook
       // White queenside: king from e1 (0,4) to c1 (0,2), rook from a1 (0,0) to d1 (0,3)
       // Black queenside: king from e8 (7,4) to c8 (7,2), rook from a8 (7,0) to d8 (7,3)
-
       // Move rook from a1/a8 to d1/d8
       board[toRow][3] = board[toRow][0]; // rook to d square
       board[toRow][0] = 0; // clear a square
-
       // Move king from e1/e8 to c1/c8
-      board[toRow][2] = board[fromRow][fromCol]; // king to c square
+      board[toRow][2] = pieceValue; // king to c square
       board[fromRow][fromCol] = 0; // clear e square
-
       hasMoved[`${activeColor}K`] = true;
       hasMoved[`${activeColor}R`].q = true;
     }
-  }
+  } else {
+    // Handle en passant capture
+    if (flags?.enPassant) {
+      // The captured pawn is on the same file, one square behind the destination
+      const capturedRow = (activeColor === 'w') ? toRow + 1 : toRow - 1;
+      board[capturedRow][toCol] = 0;
+    }
 
-  // Handle en passant capture
-  if (flags?.enPassant) {
-    // The captured pawn is on the same file, one square behind the destination
-    const capturedRow = (activeColor === 'w') ? toRow + 1 : toRow - 1;
-    board[capturedRow][toCol] = 0;
-  }
+    // Make the move: piece moves to new square
+    board[toRow][toCol] = pieceValue;
+    board[fromRow][fromCol] = 0;
 
-  // Make the move: piece moves to new square
-  // Determine the piece value based on active color
-  const pieceValue = activeColor === 'w' ? pieceType : -pieceType;
-  board[toRow][toCol] = pieceValue;
-  board[fromRow][fromCol] = 0;
-
-  // Handle promotion - default to queen
-  if (flags?.promotion) {
-    board[toRow][toCol] = activeColor === 'w' ? QUEEN : -QUEEN;
+    // Handle promotion - default to queen
+    if (flags?.promotion) {
+      board[toRow][toCol] = activeColor === 'w' ? QUEEN : -QUEEN;
+    }
   }
 
   // Update castling rights
@@ -730,7 +723,7 @@ function makeMove(move) {
     from: { row: fromRow, col: fromCol },
     to: { row: toRow, col: toCol },
     pieceValue: pieceValue,
-    captured: board[toRow][toCol] !== pieceValue ? board[toRow][toCol] : null, // captured before move
+    captured: captured,
     flags: { ...flags }
   });
 
@@ -738,7 +731,7 @@ function makeMove(move) {
   activeColor = activeColor === 'w' ? 'b' : 'w';
 
   // Check if game is over
-  const endState = checkGameEnd(pieceValue > 0 ? 'w' : 'b');
+  const endState = checkGameEnd(activeColor === 'w' ? 'w' : 'b');
   if (endState !== 'none') {
     gameOver = true;
   }
@@ -753,21 +746,27 @@ function undoMove() {
   const last = moveHistory[moveHistory.length - 1];
   const { from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol }, pieceValue, flags } = last;
 
+  // Revert to previous active color
+  activeColor = activeColor === 'w' ? 'b' : 'w';
+
+  // Restore castling rights that may have been changed
+  if (Math.abs(pieceValue) === KING) {
+    hasMoved[`${activeColor}K`] = false;
+  }
+  if (Math.abs(pieceValue) === ROOK) {
+    if (fromCol === 0) hasMoved[`${activeColor}R`].q = false;
+    if (fromCol === 7) hasMoved[`${activeColor}R`].k = false;
+  }
+
   // Reverse castling
   if (flags?.castling === 'k') {
-    // Reverse kingside castling
     // Move rook back to h1/h8
     board[toRow][7] = board[toRow][5];
     board[toRow][5] = 0;
     // Move king back to e1/e8
-    board[fromRow][fromCol] = KING * (activeColor === 'w' ? 1 : -1);
-    // Actually we need to figure out where the king went...
-    // The king went from e1/e8 to g1/g8, so to undo, king goes from g1/g8 back to e1/e8
-    // But we're reading from 'last' which has from and to positions
-    // In the original move, from was the king's original square (e1), to was g1
-    // So undo: from=g1, to=e1
-    board[fromRow][fromCol] = 0; // clear g1
-    board[toRow][toCol] = KING * (activeColor === 'w' ? 1 : -1); // place king on e1
+    board[fromRow][fromCol] = pieceValue;
+    // Clear g1/g8
+    board[toRow][6] = 0;
     hasMoved[`${activeColor}K`] = false;
     hasMoved[`${activeColor}R`].k = false;
   } else if (flags?.castling === 'q') {
@@ -776,8 +775,9 @@ function undoMove() {
     // Undo: king from c1 back to e1, rook from d1 back to a1
     board[toRow][0] = board[toRow][3]; // rook back to a1
     board[toRow][3] = 0; // clear d1
-    board[fromRow][fromCol] = 0; // clear c1
-    board[toRow][toCol] = KING * (activeColor === 'w' ? 1 : -1); // king back to e1
+    board[fromRow][fromCol] = pieceValue; // king back to e1
+    // Clear c1
+    board[toRow][2] = 0;
     hasMoved[`${activeColor}K`] = false;
     hasMoved[`${activeColor}R`].q = false;
   } else {
@@ -790,21 +790,10 @@ function undoMove() {
     if (last.captured !== null && last.captured !== undefined) {
       board[toRow][toCol] = last.captured;
     }
-    // Reset castling rights that may have been changed
-    if (Math.abs(pieceValue) === KING) {
-      hasMoved[`${activeColor}K`] = false;
-    }
-    if (Math.abs(pieceValue) === ROOK) {
-      if (fromCol === 0) hasMoved[`${activeColor}R`].q = false;
-      if (fromCol === 7) hasMoved[`${activeColor}R`].k = false;
-    }
   }
 
   // Remove from move history
   moveHistory.pop();
-
-  // Switch turn back
-  activeColor = activeColor === 'w' ? 'b' : 'w';
 
   // Check if game was previously over and now isn't
   if (gameOver) {

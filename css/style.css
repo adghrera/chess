@@ -105,21 +105,16 @@ body {
   color: #777;
   user-select: none;
   pointer-events: none;
+  position: absolute;
 }
 
 .board .label-rank {
-  grid-row: span 8;
   align-self: start;
   justify-self: start;
   padding-left: 0.5rem;
 }
 
 .board .label-file {
-  grid-column: span 1;
-  width: var(--square-size);
-  height: var(--square-size);
-  flex-direction: row;
-  justify-content: center;
   align-self: end;
   padding-bottom: 0.5rem;
 }
