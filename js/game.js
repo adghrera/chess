@@ -599,6 +599,29 @@ function getKingMoves(row, col, color, boardRef) {
   return moves;
 }
 
+// Dispatcher: get moves for the piece at (row, col) on the main board
+function getPieceMoves(row, col) {
+  const pv = board[row][col];
+  if (!pv) return [];
+  const color = pv > 0 ? 'w' : 'b';
+  const type = Math.abs(pv);
+  const moves = [];
+
+  switch (type) {
+    case PAWN: moves.push(...getPawnMoves(row, col, color, board)); break;
+    case KNIGHT: moves.push(...getKnightMoves(row, col, color, board)); break;
+    case BISHOP: moves.push(...getBishopMoves(row, col, color, board)); break;
+    case ROOK: moves.push(...getRookMoves(row, col, color, board)); break;
+    case QUEEN:
+      moves.push(...getBishopMoves(row, col, color, board));
+      moves.push(...getRookMoves(row, col, color, board));
+      break;
+    case KING: moves.push(...getKingMoves(row, col, color, board)); break;
+  }
+
+  return moves;
+}
+
 // Check if a player is in check (using current board state)
 function isInCheck(color) {
   let kingRow, kingCol;

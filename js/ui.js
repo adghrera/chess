@@ -19,10 +19,10 @@ const DOM = {
 };
 
 // UI state - only what's needed for rendering
-let selectedSquare = null; // {row, col} - selected piece location
+let uiSelectedSquare = null; // {row, col} - selected piece location
 
 // Piece symbols (Unicode)
-const PIECE_SYMBOLS = {
+const UI_PIECE_SYMBOLS = {
   w: { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙' },
   b: { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' }
 };
@@ -120,13 +120,13 @@ function renderBoard() {
         const info = pieceInfo(pieceValue);
         if (info) {
           const symKey = info.color + info.sym;
-          square.textContent = PIECE_SYMBOLS[info.color][info.sym];
+          square.textContent = UI_PIECE_SYMBOLS[info.color][info.sym];
           square.classList.add('piece');
         }
       }
 
       // Highlight selected square
-      if (selectedSquare && selectedSquare.row === rIdx && selectedSquare.col === cIdx) {
+      if (uiSelectedSquare && uiSelectedSquare.row === rIdx && uiSelectedSquare.col === cIdx) {
         square.classList.add('highlight');
       }
 
@@ -170,16 +170,16 @@ function handleSquareClick(row, col) {
   const board = state.getBoard();
   const piece = board[row][col];
 
-  if (!selectedSquare) {
+  if (!uiSelectedSquare) {
     // No piece selected yet - select this piece if it's the active player's
     if ((getActiveColor() === 'w' && piece > 0) || (getActiveColor() === 'b' && piece < 0)) {
-      selectedSquare = { row, col };
+      uiSelectedSquare = { row, col };
       renderBoard(); // Re-render to show selection highlight
     }
   } else {
     // A piece is selected - try to move it to the clicked square
-    const fromRow = selectedSquare.row;
-    const fromCol = selectedSquare.col;
+    const fromRow = uiSelectedSquare.row;
+    const fromCol = uiSelectedSquare.col;
 
     // Generate legal moves for the active color and find moves from selected square
     const legalMoves = state.generateLegalMoves(getActiveColor());
@@ -195,23 +195,23 @@ function handleSquareClick(row, col) {
         showPromotionDialog(move, (promotionPiece) => {
           move.flags.promotionPiece = promotionPiece;
           state.makeMove(move);
-          selectedSquare = null;
+          uiSelectedSquare = null;
           renderBoard();
         });
         return;
       }
       
       state.makeMove(move);
-      selectedSquare = null;
+      uiSelectedSquare = null;
       renderBoard();
       return;
     }
 
     // No legal moves from this square - deselect or select new piece
     if ((getActiveColor() === 'w' && piece > 0) || (getActiveColor() === 'b' && piece < 0)) {
-      selectedSquare = { row, col };
+      uiSelectedSquare = { row, col };
     } else {
-      selectedSquare = null;
+      uiSelectedSquare = null;
     }
     renderBoard();
   }
@@ -227,7 +227,7 @@ function showPromotionDialog(move, callback) {
   
   pieces.forEach(piece => {
     const btn = document.createElement('button');
-    btn.textContent = PIECE_SYMBOLS[color][piece];
+    btn.textContent = UI_PIECE_SYMBOLS[color][piece];
     btn.onclick = () => {
       DOM.promoDialog.classList.add('hidden');
       callback(piece);
@@ -258,7 +258,7 @@ function showGameResult(result) {
   // Ask if user wants to play again
   if (confirm(message + '\nStart a new game?')) {
     state.initBoard();
-    selectedSquare = null;
+    uiSelectedSquare = null;
     renderBoard();
   }
 }
@@ -272,7 +272,7 @@ function hidePromotionDialog() {
 function newGame() {
   const state = window.ChessGame;
   state.initBoard();
-  selectedSquare = null;
+  uiSelectedSquare = null;
   renderBoard();
 }
 
