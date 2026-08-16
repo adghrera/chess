@@ -150,84 +150,57 @@ function generateLegalMoves(color) {
 
 // Check if moving from (fromRow,fromCol) to (toRow,toCol) leaves king in check
 function leavesKingInCheck(fromRow, fromCol, toRow, toCol, color) {
-  // Build temporary board copy
   const tempBoard = board.map(r => [...r]);
+  const piece = board[fromRow][fromCol];
 
-  // Make the move on temp board
-  tempBoard[toRow][toCol] = tempBoard[fromRow][fromCol];
+  // Make the move
+  tempBoard[toRow][toCol] = piece;
   tempBoard[fromRow][fromCol] = 0;
 
-  // En passant: if last move was en passant, remove the captured pawn
+  // Handle en passant capture on temp board
   if (lastMove && lastMove.enPassant &&
-      Math.abs(toRow - fromRow) === 1 && toCol === lastMove.enPassantCol) {
+      Math.abs(toRow - fromRow) === 1 && toCol === lastMove.toCol &&
+      board[toRow][toCol] === 0) {
     const capturedRow = (color === 'w') ? toRow + 1 : toRow - 1;
     tempBoard[capturedRow][toCol] = 0;
   }
 
-  // Find our king on the temp board
-  let kingRow, kingCol;
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      const p = tempBoard[r][c];
-      if ((p > 0 && color === 'w') || (p < 0 && color === 'b')) {
-        if (Math.abs(p) === KING) {
-          kingRow = r; kingCol = c;
-        }
+  // Find king on temp board
+  const kingVal = color === 'w' ? KING : -KING;
+  let kingRow = toRow, kingCol = toCol;
+  if (Math.abs(piece) !== KING) {
+    kingRow = undefined;
+    for (let r = 0; r < 8 && kingRow === undefined; r++) {
+      for (let c = 0; c < 8; c++) {
+        if (tempBoard[r][c] === kingVal) { kingRow = r; kingCol = c; }
       }
     }
   }
-
   if (kingRow === undefined) return false;
 
-  // Check if any opponent piece attacks the king square
-  const opponentColor = color === 'w' ? 'b' : 'w';
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      const pv = tempBoard[r][c];
-      if ((pv < 0 && color === 'w') || (pv > 0 && color === 'b')) { // opponent piece
-        const opponentMoves = getPieceMovesTemp(r, c, tempBoard);
-        for (const m of opponentMoves) {
-          if (m.toRow === kingRow && m.toCol === kingCol) {
-            return true; // King would be in check
-          }
-        }
-      }
-    }
-  }
-
-  return false;
+  return isSquareAttacked(kingRow, kingCol, color, tempBoard);
 }
 
 // Get piece moves using a provided tempBoard (for check analysis)
+// NOTE: no castling here — we only need attack squares, not legal moves
 function getPieceMovesTemp(row, col, tempBoard) {
   const pieceValue = tempBoard[row][col];
   if (!pieceValue) return [];
 
   const color = pieceValue > 0 ? 'w' : 'b';
   const type = Math.abs(pieceValue);
-
   const moves = [];
 
   switch (type) {
-    case PAWN:
-      moves.push(...getPawnMovesTemp(row, col, color, tempBoard));
-      break;
-    case KNIGHT:
-      moves.push(...getKnightMovesTemp(row, col, color, tempBoard));
-      break;
-    case BISHOP:
-      moves.push(...getBishopMovesTemp(row, col, color, tempBoard));
-      break;
-    case ROOK:
-      moves.push(...getRookMovesTemp(row, col, color, tempBoard));
-      break;
+    case PAWN: moves.push(...getPawnMovesTemp(row, col, color, tempBoard)); break;
+    case KNIGHT: moves.push(...getKnightMovesTemp(row, col, color, tempBoard)); break;
+    case BISHOP: moves.push(...getBishopMovesTemp(row, col, color, tempBoard)); break;
+    case ROOK: moves.push(...getRookMovesTemp(row, col, color, tempBoard)); break;
     case QUEEN:
       moves.push(...getBishopMovesTemp(row, col, color, tempBoard));
       moves.push(...getRookMovesTemp(row, col, color, tempBoard));
       break;
-    case KING:
-      moves.push(...getKingMovesTemp(row, col, color, tempBoard));
-      break;
+    case KING: moves.push(...getKingMovesTemp(row, col, color, tempBoard)); break;
   }
 
   return moves;
@@ -350,88 +323,26 @@ function getRookMovesTemp(row, col, color, boardRef) {
   return moves;
 }
 
-// King moves
+// King moves (temp board version - no castling, just attack squares)
 function getKingMovesTemp(row, col, color, boardRef) {
   const moves = [];
-  const kingMoves = [
-    [-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]
-  ];
-
-  for (const [dr, dc] of kingMoves) {
-    const r = row + dr;
-    const c = col + dc;
-    if (r >= 0 && r < 8 && c >= 0 && c < 8) {
-      const target = boardRef[r][c];
-      if (target === 0 || ((color === 'w' && target < 0) || (color === 'b' && target > 0))) {
-        moves.push({ toRow: r, toCol: c, flags: { capture: target !== 0 } });
-      }
-    }
-  }
-
-  // Castling
-  if (!hasMoved[`${color}K`]) {
-    // Kingside: rook at column 7
-    if (!hasMoved[`${color}R`]?.k && boardRef[row][7] !== 0 && Math.abs(boardRef[row][7]) === ROOK) {
-      if (boardRef[row][5] === 0 && boardRef[row][6] === 0) {
-        if (!leavesKingInCheckTemp(row, col, row, 6, color)) {
-          moves.push({ toRow: row, toCol: 6, flags: { castling: 'k' } });
-        }
-      }
-    }
-    // Queenside: rook at column 0
-    if (!hasMoved[`${color}R`]?.q && boardRef[row][0] !== 0 && Math.abs(boardRef[row][0]) === ROOK) {
-      if (boardRef[row][1] === 0 && boardRef[row][2] === 0 && boardRef[row][3] === 0) {
-        if (!leavesKingInCheckTemp(row, col, row, 2, color)) {
-          moves.push({ toRow: row, toCol: 2, flags: { castling: 'q' } });
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      if (dr === 0 && dc === 0) continue;
+      const r = row + dr;
+      const c = col + dc;
+      if (r >= 0 && r < 8 && c >= 0 && c < 8) {
+        const target = boardRef[r][c];
+        if (target === 0 || ((color === 'w' && target < 0) || (color === 'b' && target > 0))) {
+          moves.push({ toRow: r, toCol: c, flags: { capture: target !== 0 } });
         }
       }
     }
   }
-
   return moves;
 }
 
-// Helper internal check function
-function leavesKingInCheckTemp(fromRow, fromCol, toRow, toCol, color) {
-  const tempBoard = board.map(r => [...r]);
-  tempBoard[toRow][toCol] = tempBoard[fromRow][fromCol];
-  tempBoard[fromRow][fromCol] = 0;
 
-  // En passant capture
-  if (lastMove && lastMove.enPassant &&
-      Math.abs(toRow - fromRow) === 1 && toCol === lastMove.enPassantCol) {
-    const capturedRow = (color === 'w') ? toRow + 1 : toRow - 1;
-    tempBoard[capturedRow][toCol] = 0;
-  }
-
-  let kingRow, kingCol;
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      const p = tempBoard[r][c];
-      if ((p > 0 && color === 'w') || (p < 0 && color === 'b')) {
-        if (Math.abs(p) === KING) {
-          kingRow = r; kingCol = c;
-        }
-      }
-    }
-  }
-
-  if (kingRow === undefined) return false;
-
-  const opponentColor = color === 'w' ? 'b' : 'w';
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      const pv = tempBoard[r][c];
-      if ((pv < 0 && color === 'w') || (pv > 0 && color === 'b')) {
-        const om = getPieceMovesTemp(r, c, tempBoard);
-        for (const m of om) {
-          if (m.toRow === kingRow && m.toCol === kingCol) return true;
-        }
-      }
-    }
-  }
-  return false;
-}
 
 // Pawn moves (with en passant support for main game)
 function getPawnMoves(row, col, color, boardRef) {
@@ -462,18 +373,19 @@ function getPawnMoves(row, col, color, boardRef) {
       if (target !== 0 && ((color === 'w' && target < 0) || (color === 'b' && target > 0))) {
         moves.push({ toRow: row + dir, toCol: c, flags: { capture: true } });
       }
-      // En passant: if last move was a pawn advancing two squares
+      // En passant
       if (lastMove && lastMove.enPassant &&
           Math.abs(lastMove.fromRow - lastMove.toRow) === 2 &&
-          c === lastMove.toCol && (row + dir) === lastMove.toRow) {
+          c === lastMove.toCol && (row + dir) === lastMove.toRow &&
+          boardRef[row + dir][c] === 0) {
         moves.push({ toRow: row + dir, toCol: c, flags: { enPassant: true, enPassantCol: c } });
       }
     }
   }
 
-  // Promotion
-  for (const m of [...moves]) {
-    if (m.toRow === promoRow && (m.flags.capture || m.flags.enPassant || boardRef[m.toRow][m.toCol] === 0)) {
+  // Promotion: any move reaching promo row promotes
+  for (const m of moves) {
+    if (m.toRow === promoRow) {
       m.flags = m.flags || {};
       m.promotion = true;
     }
@@ -574,22 +486,24 @@ function getKingMoves(row, col, color, boardRef) {
     }
   }
 
-  // Castling
+  // Castling (uses global hasMoved, validates with isSquareAttackedByOpponent)
   if (!hasMoved[`${color}K`]) {
-    // Kingside: rook at column 7
+    // Kingside
     if (!hasMoved[`${color}R`]?.k && boardRef[row][7] !== 0 && Math.abs(boardRef[row][7]) === ROOK) {
       if (boardRef[row][5] === 0 && boardRef[row][6] === 0) {
-        // Check that king doesn't pass through check
-        if (!leavesKingInCheck(row, col, row, 5, color) && !leavesKingInCheck(row, col, row, 6, color)) {
+        if (!isSquareAttackedByOpponent(row, 4, color) &&
+            !isSquareAttackedByOpponent(row, 5, color) &&
+            !isSquareAttackedByOpponent(row, 6, color)) {
           moves.push({ toRow: row, toCol: 6, flags: { castling: 'k' } });
         }
       }
     }
-    // Queenside: rook at column 0
+    // Queenside
     if (!hasMoved[`${color}R`]?.q && boardRef[row][0] !== 0 && Math.abs(boardRef[row][0]) === ROOK) {
       if (boardRef[row][1] === 0 && boardRef[row][2] === 0 && boardRef[row][3] === 0) {
-        // Check that king doesn't pass through check
-        if (!leavesKingInCheck(row, col, row, 3, color) && !leavesKingInCheck(row, col, row, 2, color)) {
+        if (!isSquareAttackedByOpponent(row, 4, color) &&
+            !isSquareAttackedByOpponent(row, 3, color) &&
+            !isSquareAttackedByOpponent(row, 2, color)) {
           moves.push({ toRow: row, toCol: 2, flags: { castling: 'q' } });
         }
       }
@@ -622,36 +536,111 @@ function getPieceMoves(row, col) {
   return moves;
 }
 
+// Check if a square is attacked by any opponent piece (given a board state)
+// Does NOT consider castling — king can't castle while in check anyway
+function isSquareAttacked(row, col, byColor, boardRef) {
+  const opponentColor = byColor === 'w' ? 'b' : 'w';
+
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = boardRef[r][c];
+      if (p === 0) continue;
+      if ((p > 0 && opponentColor !== 'w') || (p < 0 && opponentColor !== 'b')) continue;
+
+      const type = Math.abs(p);
+      const attacks = getAttackSquares(r, c, opponentColor, boardRef, type);
+      for (const a of attacks) {
+        if (a.row === row && a.col === col) return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Get all squares a piece of given type can attack (ignoring legality, no castling)
+function getAttackSquares(row, col, color, boardRef, type) {
+  const attacks = [];
+
+  switch (type) {
+    case PAWN: {
+      const dir = color === 'w' ? -1 : 1;
+      for (const dc of [-1, 1]) {
+        const r = row + dir;
+        const c = col + dc;
+        if (r >= 0 && r < 8 && c >= 0 && c < 8) {
+          attacks.push({ row: r, col: c });
+        }
+      }
+      break;
+    }
+    case KNIGHT: {
+      const deltas = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+      for (const [dr, dc] of deltas) {
+        const r = row + dr, c = col + dc;
+        if (r >= 0 && r < 8 && c >= 0 && c < 8) attacks.push({ row: r, col: c });
+      }
+      break;
+    }
+    case BISHOP:
+      attacks.push(...getSlidingAttacks(row, col, boardRef, [[-1,-1],[-1,1],[1,-1],[1,1]]));
+      break;
+    case ROOK:
+      attacks.push(...getSlidingAttacks(row, col, boardRef, [[-1,0],[1,0],[0,-1],[0,1]]));
+      break;
+    case QUEEN:
+      attacks.push(...getSlidingAttacks(row, col, boardRef, [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]]));
+      break;
+    case KING: {
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const r = row + dr, c = col + dc;
+          if (r >= 0 && r < 8 && c >= 0 && c < 8) attacks.push({ row: r, col: c });
+        }
+      }
+      break;
+    }
+  }
+  return attacks;
+}
+
+function getSlidingAttacks(row, col, boardRef, directions) {
+  const attacks = [];
+  const color = boardRef[row][col] > 0 ? 'w' : 'b';
+  for (const [dr, dc] of directions) {
+    let r = row + dr, c = col + dc;
+    while (r >= 0 && r < 8 && c >= 0 && c < 8) {
+      const p = boardRef[r][c];
+      attacks.push({ row: r, col: c });
+      if (p !== 0) {
+        if ((color === 'w' && p > 0) || (color === 'b' && p < 0)) break;
+        break;
+      }
+      r += dr;
+      c += dc;
+    }
+  }
+  return attacks;
+}
+
+// Check if a square is attacked by opponent (convenience wrapper for global board)
+function isSquareAttackedByOpponent(row, col, color) {
+  return isSquareAttacked(row, col, color, board);
+}
+
 // Check if a player is in check (using current board state)
 function isInCheck(color) {
   let kingRow, kingCol;
+  const kingVal = color === 'w' ? KING : -KING;
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
-      const p = board[r][c];
-      if ((p > 0 && color === 'w') || (p < 0 && color === 'b')) {
-        if (Math.abs(p) === KING) {
-          kingRow = r; kingCol = c;
-        }
+      if (board[r][c] === kingVal) {
+        kingRow = r; kingCol = c;
       }
     }
   }
-
   if (kingRow === undefined) return false;
-
-  const opponentColor = color === 'w' ? 'b' : 'w';
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      const pv = board[r][c];
-      if ((pv < 0 && color === 'w') || (pv > 0 && color === 'b')) {
-        const om = getPieceMoves(r, c);
-        for (const m of om) {
-          if (m.toRow === kingRow && m.toCol === kingCol) return true;
-        }
-      }
-    }
-  }
-
-  return false;
+  return isSquareAttackedByOpponent(kingRow, kingCol, color);
 }
 
 // Check for checkmate, stalemate, or ongoing
