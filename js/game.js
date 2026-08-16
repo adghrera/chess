@@ -1,5 +1,5 @@
-// Chess Game Logic
-// ----------------
+// Chess Game Logic - Standalone module
+// -------------------------------------
 
 // Piece type constants
 const PAWN = 1, KNIGHT = 2, BISHOP = 3, ROOK = 4, QUEEN = 5, KING = 6;
@@ -9,9 +9,6 @@ const PIECE_SYMBOLS = {
   w: { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙' },
   b: { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' }
 };
-
-// Piece type names for lookup
-const PIECE_NAMES = { 1: 'P', 2: 'N', 3: 'B', 4: 'R', 5: 'Q', 6: 'K' };
 
 // Board setup: starting position
 // 0 = empty, positive = white, negative = black
@@ -23,15 +20,15 @@ let board = [];
 // Game state
 let activeColor = 'w'; // 'w' for white, 'b' for black
 let gameOver = false;
-let selectedSquare = null; // {row, col}
-let lastMove = null; // For en passant: {fromRow, fromCol, toRow, toCol, capturedPawnCol}
-let moveHistory = []; // Array of {from, to, pieceValue, captured, promotion, flags}
+let selectedSquare = null; // {row, col} - tracked by UI but initialized here
+let lastMove = null; // For en passant: {fromRow, fromCol, toRow, toCol, enPassant: boolean}
+let moveHistory = []; // Array of move objects
 let hasMoved = { // Castling rights tracking
   wK: false, wQ: false, bK: false, bQ: false,
   wR: { q: false, k: false }, bR: { q: false, k: false }
 };
 
-// Map piece value to color and type
+// Map piece value to color and type string
 function pieceInfo(pieceVal) {
   if (pieceVal === 0) return null;
   const color = pieceVal > 0 ? 'w' : 'b';
@@ -46,7 +43,7 @@ function pieceInfo(pieceVal) {
     case KING: sym = 'K'; break;
     default: sym = 'P';
   }
-  return { color, type, sym, val: pieceVal };
+  return { color, type, sym };
 }
 
 // Initialize the board with starting position
@@ -69,7 +66,7 @@ function initBoard() {
     board[1][c] = PAWN;
   }
 
-  // Empty rows 2-5
+  // Empty rows 2-5 (no pieces)
   for (let r = 2; r < 5; r++) {
     for (let c = 0; c < 8; c++) {
       board[r][c] = 0;
@@ -99,10 +96,16 @@ function initBoard() {
   };
 }
 
-// Get piece info at square
+// Get piece value at board[row][col]
 function getPieceAt(row, col) {
   if (row < 0 || row >= 8 || col < 0 || col >= 8) return 0;
   return board[row][col];
+}
+
+// Get piece info object at square
+function getPieceInfo(row, col) {
+  const pv = getPieceAt(row, col);
+  return pieceInfo(pv);
 }
 
 // Check if square has a piece of given color
@@ -117,7 +120,7 @@ function hasOpponentPiece(row, col, color) {
   return p !== 0 && ((p > 0 && color === 'b') || (p < 0 && color === 'w'));
 }
 
-// Generate all legal moves for a color (without making the move)
+// Generate all legal moves for a color (pure calculation, doesn't modify board)
 function generateLegalMoves(color) {
   const moves = [];
 
@@ -127,6 +130,7 @@ function generateLegalMoves(color) {
       if ((pv > 0 && color === 'w') || (pv < 0 && color === 'b')) {
         const pieceMoves = getPieceMoves(r, c);
         for (const m of pieceMoves) {
+          // Check if moving here leaves king in check
           if (!leavesKingInCheck(r, c, m.toRow, m.toCol, color)) {
             moves.push({
               from: { row: r, col: c },
@@ -146,22 +150,21 @@ function generateLegalMoves(color) {
 
 // Check if moving from (fromRow,fromCol) to (toRow,toCol) leaves king in check
 function leavesKingInCheck(fromRow, fromCol, toRow, toCol, color) {
-  // Build temporary board
+  // Build temporary board copy
   const tempBoard = board.map(r => [...r]);
 
-  // Move piece on temp board
+  // Make the move on temp board
   tempBoard[toRow][toCol] = tempBoard[fromRow][fromCol];
   tempBoard[fromRow][fromCol] = 0;
 
-  // En passant: if the move is an en passant, the captured pawn is removed
+  // En passant: if last move was en passant, remove the captured pawn
   if (lastMove && lastMove.enPassant &&
       Math.abs(toRow - fromRow) === 1 && toCol === lastMove.enPassantCol) {
-    // The captured pawn was on the same file, one row behind the destination
     const capturedRow = (color === 'w') ? toRow + 1 : toRow - 1;
     tempBoard[capturedRow][toCol] = 0;
   }
 
-  // Find our king
+  // Find our king on the temp board
   let kingRow, kingCol;
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
@@ -181,11 +184,11 @@ function leavesKingInCheck(fromRow, fromCol, toRow, toCol, color) {
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
       const pv = tempBoard[r][c];
-      if ((pv < 0 && color === 'w') || (pv > 0 && color === 'b')) { // opponent
+      if ((pv < 0 && color === 'w') || (pv > 0 && color === 'b')) { // opponent piece
         const opponentMoves = getPieceMovesTemp(r, c, tempBoard);
         for (const m of opponentMoves) {
           if (m.toRow === kingRow && m.toCol === kingCol) {
-            return true;
+            return true; // King would be in check
           }
         }
       }
@@ -195,7 +198,7 @@ function leavesKingInCheck(fromRow, fromCol, toRow, toCol, color) {
   return false;
 }
 
-// Get piece moves using a provided tempBoard (for leavesKingInCheck)
+// Get piece moves using a provided tempBoard (for check analysis)
 function getPieceMovesTemp(row, col, tempBoard) {
   const pieceValue = tempBoard[row][col];
   if (!pieceValue) return [];
@@ -230,7 +233,7 @@ function getPieceMovesTemp(row, col, tempBoard) {
   return moves;
 }
 
-// Pawn moves (temp board version - no en passant tracking needed beyond what's passed)
+// Pawn moves (temp board version - used in check analysis)
 function getPawnMovesTemp(row, col, color, boardRef) {
   const dir = color === 'w' ? -1 : 1;
   const startRow = color === 'w' ? 6 : 1;
@@ -259,7 +262,6 @@ function getPawnMovesTemp(row, col, color, boardRef) {
       if (target !== 0 && ((color === 'w' && target < 0) || (color === 'b' && target > 0))) {
         moves.push({ toRow: row + dir, toCol: c, flags: { capture: true } });
       }
-      // En passant - handled separately in leavesKingInCheck
     }
   }
 
@@ -369,8 +371,7 @@ function getKingMovesTemp(row, col, color, boardRef) {
   // Castling
   if (!hasMoved[`${color}K`]) {
     // Kingside: rook at column 7
-    const rookCol = 7;
-    if (!hasMoved[`${color}R`]?.k && boardRef[row][rookCol] !== 0 && Math.abs(boardRef[row][rookCol]) === ROOK) {
+    if (!hasMoved[`${color}R`]?.k && boardRef[row][7] !== 0 && Math.abs(boardRef[row][7]) === ROOK) {
       if (boardRef[row][5] === 0 && boardRef[row][6] === 0) {
         if (!leavesKingInCheckTemp(row, col, row, 6, color)) {
           moves.push({ toRow: row, toCol: 6, flags: { castling: 'k' } });
@@ -390,7 +391,7 @@ function getKingMovesTemp(row, col, color, boardRef) {
   return moves;
 }
 
-// Helper: leavesKingInCheck using temp board (internal)
+// Helper internal check function
 function leavesKingInCheckTemp(fromRow, fromCol, toRow, toCol, color) {
   const tempBoard = board.map(r => [...r]);
   tempBoard[toRow][toCol] = tempBoard[fromRow][fromCol];
@@ -432,7 +433,7 @@ function leavesKingInCheckTemp(fromRow, fromCol, toRow, toCol, color) {
   return false;
 }
 
-// Pawn moves (main version with en passant support)
+// Pawn moves (with en passant support for main game)
 function getPawnMoves(row, col, color, boardRef) {
   const dir = color === 'w' ? -1 : 1;
   const startRow = color === 'w' ? 6 : 1;
@@ -462,11 +463,10 @@ function getPawnMoves(row, col, color, boardRef) {
         moves.push({ toRow: row + dir, toCol: c, flags: { capture: true } });
       }
       // En passant: if last move was a pawn advancing two squares
-      if (lastMove && lastMove.pieceType === 'P' && Math.abs(lastMove.fromRow - lastMove.toRow) === 2) {
-        const enPassantRow = row + dir;
-        if (c === lastMove.toCol && enPassantRow === lastMove.toRow) {
-          moves.push({ toRow: enPassantRow, toCol: c, flags: { enPassant: true, enPassantCol: c } });
-        }
+      if (lastMove && lastMove.enPassant &&
+          Math.abs(lastMove.fromRow - lastMove.toRow) === 2 &&
+          c === lastMove.toCol && (row + dir) === lastMove.toRow) {
+        moves.push({ toRow: row + dir, toCol: c, flags: { enPassant: true, enPassantCol: c } });
       }
     }
   }
@@ -650,30 +650,47 @@ function checkGameEnd(color) {
 function makeMove(move) {
   const { from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol }, pieceType, captured, flags } = move;
 
-  // Store last move for en passant (save enough info)
+  // Store last move for en passant
   lastMove = {
     fromRow, fromCol, toRow, toCol,
-    pieceType,
-    enPassant: !!flags?.enPassant
+    enPassant: !!flags?.enPassant,
+    pieceType
   };
-
-  // Save the captured piece value for history
-  const capturedValue = board[toRow][toCol];
 
   // Handle castling
   if (flags?.castling) {
     if (flags.castling === 'k') {
       // Kingside: rook moves from h1/h8 to f1/f8
-      board[toRow][toCol + 1] = 0; // clear destination+1
-      board[toRow][toCol - 1] = board[toRow][7 + (color === 'w' ? 0 : 7)]; // move rook
-      board[toRow][7 + (color === 'w' ? 0 : 7)] = 0; // clear original rook position
+      const rookOriginalCol = 7;
+      const rookNewCol = toCol - 1; // f-file is col 5, rook goes to g5 (col 6->5... wait)
+      // Let me think about this more carefully
+      // Kingside castling: king moves 2 squares toward rook
+      // White kingside: king from e1 (0,4) to g1 (0,6), rook from h1 (0,7) to f1 (0,5)
+      // Black kingside: king from e8 (7,4) to g8 (7,6), rook from h8 (7,7) to f8 (7,5)
+
+      // Move rook from h1/h8 to f1/f8
+      board[toRow][5] = board[toRow][7]; // rook to f square
+      board[toRow][7] = 0; // clear h square
+
+      // Move king from e1/e8 to g1/g8
+      board[toRow][6] = board[fromRow][fromCol]; // king to g square
+      board[fromRow][fromCol] = 0; // clear e square
+
       hasMoved[`${activeColor}K`] = true;
       hasMoved[`${activeColor}R`].k = true;
     } else if (flags.castling === 'q') {
-      // Queenside: rook moves from a1/a8 to d1/d8
-      board[toRow][toCol - 1] = 0; // clear destination-1
-      board[toRow][toCol + 1] = board[toRow][0 + (color === 'w' ? 0 : 7)]; // move rook
-      board[toRow][0 + (color === 'w' ? 0 : 7)] = 0; // clear original rook position
+      // Queenside castling: king moves 2 squares toward queenside rook
+      // White queenside: king from e1 (0,4) to c1 (0,2), rook from a1 (0,0) to d1 (0,3)
+      // Black queenside: king from e8 (7,4) to c8 (7,2), rook from a8 (7,0) to d8 (7,3)
+
+      // Move rook from a1/a8 to d1/d8
+      board[toRow][3] = board[toRow][0]; // rook to d square
+      board[toRow][0] = 0; // clear a square
+
+      // Move king from e1/e8 to c1/c8
+      board[toRow][2] = board[fromRow][fromCol]; // king to c square
+      board[fromRow][fromCol] = 0; // clear e square
+
       hasMoved[`${activeColor}K`] = true;
       hasMoved[`${activeColor}R`].q = true;
     }
@@ -681,25 +698,28 @@ function makeMove(move) {
 
   // Handle en passant capture
   if (flags?.enPassant) {
-    // Remove the captured pawn that just moved two squares
+    // The captured pawn is on the same file, one square behind the destination
     const capturedRow = (activeColor === 'w') ? toRow + 1 : toRow - 1;
     board[capturedRow][toCol] = 0;
   }
 
   // Make the move: piece moves to new square
-  board[toRow][toCol] = activeColor === 'w' ? pieceType : -pieceType;
+  // Determine the piece value based on active color
+  const pieceValue = activeColor === 'w' ? pieceType : -pieceType;
+  board[toRow][toCol] = pieceValue;
   board[fromRow][fromCol] = 0;
 
-  // Handle promotion
+  // Handle promotion - default to queen
   if (flags?.promotion) {
-    // Default to queen
     board[toRow][toCol] = activeColor === 'w' ? QUEEN : -QUEEN;
   }
 
   // Update castling rights
+  // King has moved
   if (pieceType === KING) {
     hasMoved[`${activeColor}K`] = true;
   }
+  // Rook has moved from its original position
   if (pieceType === ROOK) {
     if (fromCol === 0) hasMoved[`${activeColor}R`].q = true;
     if (fromCol === 7) hasMoved[`${activeColor}R`].k = true;
@@ -709,13 +729,19 @@ function makeMove(move) {
   moveHistory.push({
     from: { row: fromRow, col: fromCol },
     to: { row: toRow, col: toCol },
-    pieceValue: activeColor === 'w' ? pieceType : -pieceType,
-    captured: capturedValue,
+    pieceValue: pieceValue,
+    captured: board[toRow][toCol] !== pieceValue ? board[toRow][toCol] : null, // captured before move
     flags: { ...flags }
   });
 
   // Switch turn
   activeColor = activeColor === 'w' ? 'b' : 'w';
+
+  // Check if game is over
+  const endState = checkGameEnd(pieceValue > 0 ? 'w' : 'b');
+  if (endState !== 'none') {
+    gameOver = true;
+  }
 
   return true;
 }
@@ -729,21 +755,29 @@ function undoMove() {
 
   // Reverse castling
   if (flags?.castling === 'k') {
-    // Reverse kingside castling: rook goes back, king goes back
-    const r = activeColor === 'w' ? 'w' : 'b';
+    // Reverse kingside castling
+    // Move rook back to h1/h8
+    board[toRow][7] = board[toRow][5];
+    board[toRow][5] = 0;
+    // Move king back to e1/e8
     board[fromRow][fromCol] = KING * (activeColor === 'w' ? 1 : -1);
-    board[toRow][toCol - 1] = 0; // clear where king went
-    board[toRow][toCol + 1] = ROOK * (activeColor === 'w' ? 1 : -1); // move rook back
-    board[toRow][7 + (activeColor === 'w' ? 0 : 7)] = 0; // clear rook original
+    // Actually we need to figure out where the king went...
+    // The king went from e1/e8 to g1/g8, so to undo, king goes from g1/g8 back to e1/e8
+    // But we're reading from 'last' which has from and to positions
+    // In the original move, from was the king's original square (e1), to was g1
+    // So undo: from=g1, to=e1
+    board[fromRow][fromCol] = 0; // clear g1
+    board[toRow][toCol] = KING * (activeColor === 'w' ? 1 : -1); // place king on e1
     hasMoved[`${activeColor}K`] = false;
     hasMoved[`${activeColor}R`].k = false;
   } else if (flags?.castling === 'q') {
     // Reverse queenside castling
-    const r = activeColor === 'w' ? 'w' : 'b';
-    board[fromRow][fromCol] = KING * (activeColor === 'w' ? 1 : -1);
-    board[toRow][toCol + 1] = 0; // clear where king went
-    board[toRow][toCol - 1] = ROOK * (activeColor === 'w' ? 1 : -1); // move rook back
-    board[toRow][0 + (activeColor === 'w' ? 0 : 7)] = 0; // clear rook original
+    // Queen-side: king from e1 to c1, rook from a1 to d1
+    // Undo: king from c1 back to e1, rook from d1 back to a1
+    board[toRow][0] = board[toRow][3]; // rook back to a1
+    board[toRow][3] = 0; // clear d1
+    board[fromRow][fromCol] = 0; // clear c1
+    board[toRow][toCol] = KING * (activeColor === 'w' ? 1 : -1); // king back to e1
     hasMoved[`${activeColor}K`] = false;
     hasMoved[`${activeColor}R`].q = false;
   } else {
@@ -752,8 +786,8 @@ function undoMove() {
     board[toRow][toCol] = 0;
     // Place piece back at origin
     board[fromRow][fromCol] = pieceValue;
-    // Restore captured piece
-    if (last.captured !== undefined && last.captured !== null) {
+    // Restore captured piece if any
+    if (last.captured !== null && last.captured !== undefined) {
       board[toRow][toCol] = last.captured;
     }
     // Reset castling rights that may have been changed
@@ -771,6 +805,14 @@ function undoMove() {
 
   // Switch turn back
   activeColor = activeColor === 'w' ? 'b' : 'w';
+
+  // Check if game was previously over and now isn't
+  if (gameOver) {
+    const endState = checkGameEnd(activeColor === 'w' ? 'w' : 'b');
+    if (endState === 'none') {
+      gameOver = false;
+    }
+  }
 
   return true;
 }
