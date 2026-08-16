@@ -56,14 +56,14 @@ function initBoard() {
     }
   }
 
-  // White back rank (row 0)
-  board[0][0] = ROOK; board[0][1] = KNIGHT; board[0][2] = BISHOP;
-  board[0][3] = QUEEN; board[0][4] = KING; board[0][5] = BISHOP;
-  board[0][6] = KNIGHT; board[0][7] = ROOK;
+  // Black back rank (row 0)
+  board[0][0] = -ROOK; board[0][1] = -KNIGHT; board[0][2] = -BISHOP;
+  board[0][3] = -QUEEN; board[0][4] = -KING; board[0][5] = -BISHOP;
+  board[0][6] = -KNIGHT; board[0][7] = -ROOK;
 
-  // White pawns (row 1)
+  // Black pawns (row 1)
   for (let c = 0; c < 8; c++) {
-    board[1][c] = PAWN;
+    board[1][c] = -PAWN;
   }
 
   // Empty rows 2-5 (no pieces)
@@ -73,15 +73,15 @@ function initBoard() {
     }
   }
 
-  // Black pawns (row 6)
+  // White pawns (row 6)
   for (let c = 0; c < 8; c++) {
-    board[6][c] = -PAWN;
+    board[6][c] = PAWN;
   }
 
-  // Black back rank (row 7)
-  board[7][0] = -ROOK; board[7][1] = -KNIGHT; board[7][2] = -BISHOP;
-  board[7][3] = -QUEEN; board[7][4] = -KING; board[7][5] = -BISHOP;
-  board[7][6] = -KNIGHT; board[7][7] = -ROOK;
+  // White back rank (row 7)
+  board[7][0] = ROOK; board[7][1] = KNIGHT; board[7][2] = BISHOP;
+  board[7][3] = QUEEN; board[7][4] = KING; board[7][5] = BISHOP;
+  board[7][6] = KNIGHT; board[7][7] = ROOK;
 
   // Reset game state
   activeColor = 'w';
