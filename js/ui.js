@@ -20,7 +20,7 @@ const DOM = {
 
 // UI state - only what's needed for rendering
 let uiSelectedSquare = null; // {row, col} - selected piece location
-let aiMode = 'off'; // 'off', 'easy', 'medium', 'hard'
+let aiMode = 'easy'; // 'off', 'easy', 'medium', 'hard'
 let aiColor = 'b'; // AI plays as black by default
 
 // Piece symbols (Unicode)
