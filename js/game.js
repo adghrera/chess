@@ -742,9 +742,9 @@ function makeMove(move) {
   // Switch turn
   activeColor = activeColor === 'w' ? 'b' : 'w';
 
-  // Check if game is over
-  const endState = checkGameEnd(activeColor === 'w' ? 'w' : 'b');
-  if (endState !== 'none') {
+  // Check if game is over (only checkmate/stalemate, not just check)
+  const endState = checkGameEnd(activeColor);
+  if (endState === 'checkmate' || endState === 'stalemate') {
     gameOver = true;
   }
 

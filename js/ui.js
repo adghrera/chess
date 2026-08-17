@@ -141,7 +141,11 @@ function renderBoard() {
 
   // Update status bar
   const turnText = activeColor === 'w' ? 'White' : 'Black';
-  DOM.status.textContent = `${turnText} to move`;
+  if (state.isInCheck(activeColor)) {
+    DOM.status.textContent = `${turnText} is in check!`;
+  } else {
+    DOM.status.textContent = `${turnText} to move`;
+  }
 }
 
 // Piece info helper - keeps UI self-contained
