@@ -193,6 +193,15 @@ function leavesKingInCheckForBoard(fromRow, fromCol, toRow, toCol, color, boardR
   tempBoard[toRow][toCol] = pv;
   tempBoard[fromRow][fromCol] = 0;
 
+  // Handle promotion for check analysis
+  if (pieceType === 1) {
+    const promoRow = color === 'w' ? 0 : 7;
+    if (toRow === promoRow) {
+      const sign = color === 'w' ? 1 : -1;
+      tempBoard[toRow][toCol] = sign * 5; // promote to queen
+    }
+  }
+
   // Find king
   let kingRow, kingCol;
   const kingVal = color === 'w' ? 6 : -6;

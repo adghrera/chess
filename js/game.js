@@ -157,8 +157,19 @@ function leavesKingInCheck(fromRow, fromCol, toRow, toCol, color) {
   tempBoard[toRow][toCol] = piece;
   tempBoard[fromRow][fromCol] = 0;
 
+  // Handle promotion
+  const pieceType = Math.abs(piece);
+  if (pieceType === PAWN) {
+    const promoRow = color === 'w' ? 0 : 7;
+    if (toRow === promoRow) {
+      const sign = color === 'w' ? 1 : -1;
+      tempBoard[toRow][toCol] = sign * QUEEN;
+    }
+  }
+
   // Handle en passant capture on temp board
-  if (lastMove && lastMove.enPassant &&
+  if (lastMove && lastMove.pieceType === PAWN &&
+      Math.abs(lastMove.fromRow - lastMove.toRow) === 2 &&
       Math.abs(toRow - fromRow) === 1 && toCol === lastMove.toCol &&
       board[toRow][toCol] === 0) {
     const capturedRow = (color === 'w') ? toRow + 1 : toRow - 1;
@@ -374,7 +385,7 @@ function getPawnMoves(row, col, color, boardRef) {
         moves.push({ toRow: row + dir, toCol: c, flags: { capture: true } });
       }
       // En passant
-      if (lastMove && lastMove.enPassant &&
+      if (lastMove && lastMove.pieceType === PAWN &&
           Math.abs(lastMove.fromRow - lastMove.toRow) === 2 &&
           c === lastMove.toCol && (row + dir) === lastMove.toRow &&
           boardRef[row + dir][c] === 0) {
@@ -715,7 +726,10 @@ function makeMove(move) {
 
     // Handle promotion - default to queen
     if (flags?.promotion) {
-      board[toRow][toCol] = activeColor === 'w' ? QUEEN : -QUEEN;
+      const promotionPiece = flags.promotionPiece || 'Q';
+      const pieceMap = { Q: QUEEN, R: ROOK, B: BISHOP, N: KNIGHT };
+      const promoType = pieceMap[promotionPiece] || QUEEN;
+      board[toRow][toCol] = activeColor === 'w' ? promoType : -promoType;
     }
   }
 
