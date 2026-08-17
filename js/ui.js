@@ -14,6 +14,8 @@ const DOM = {
   undoBtn: document.getElementById('btn-undo'),
   resignBtn: document.getElementById('btn-resign'),
   flipBtn: document.getElementById('btn-flip'),
+  threeDBtn: document.getElementById('btn-3d'),
+  threeCanvas: document.getElementById('three-canvas'),
   aiSelect: document.getElementById('ai-select'),
   timerSelect: document.getElementById('timer-select')
 };
@@ -22,6 +24,8 @@ const DOM = {
 let uiSelectedSquare = null; // {row, col} - selected piece location
 let aiMode = 'easy'; // 'off', 'easy', 'medium', 'hard'
 let aiColor = 'b'; // AI plays as black by default
+let threeDMode = false; // 3D view toggle
+let threeScene, threeCamera, threeRenderer, threeBoardMesh, threePieces = [];
 
 // Piece symbols (Unicode)
 const UI_PIECE_SYMBOLS = {
@@ -146,6 +150,8 @@ function renderBoard() {
   } else {
     DOM.status.textContent = `${turnText} to move`;
   }
+
+  if (threeDMode) updateThreeScene();
 }
 
 // Piece info helper - keeps UI self-contained
@@ -318,6 +324,88 @@ function flipBoard() {
   renderBoard();
 }
 
+function initThreeScene() {
+  if (threeScene) return;
+  threeScene = new THREE.Scene();
+  threeScene.background = new THREE.Color(0x111111);
+  const size = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--board-size'));
+  threeCamera = new THREE.PerspectiveCamera(45, size/size, 0.1, 1000);
+  threeCamera.position.set(0, 5, 7);
+  threeCamera.lookAt(0,0,0);
+  threeRenderer = new THREE.WebGLRenderer({ canvas: DOM.threeCanvas, antialias: true });
+  threeRenderer.setSize(size, size);
+  // Checkerboard board
+  const boardGroup = new THREE.Group();
+  const squareSize = 1;
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const isLight = (r + c) % 2 === 0;
+      const mat = new THREE.MeshStandardMaterial({ color: isLight ? 0xf0d9b5 : 0xb58863, side: THREE.DoubleSide });
+      const geo = new THREE.PlaneGeometry(squareSize, squareSize);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(c - 3.5, 0, r - 3.5);
+      boardGroup.add(mesh);
+    }
+  }
+  threeScene.add(boardGroup);
+  // Lights
+  const light = new THREE.DirectionalLight(0xffffff, 1);
+  light.position.set(5,10,5);
+  threeScene.add(light);
+  const amb = new THREE.AmbientLight(0xffffff, 0.4);
+  threeScene.add(amb);
+  // Animate
+  function animate() {
+    if (!threeDMode) return;
+    requestAnimationFrame(animate);
+    threeRenderer.render(threeScene, threeCamera);
+  }
+  animate();
+}
+
+function updateThreeScene() {
+  if (!threeScene || !threeRenderer) return;
+  const board = window.ChessGame.getBoard();
+  // Remove old pieces
+  threePieces.forEach(m => threeScene.remove(m));
+  threePieces = [];
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = board[r][c];
+      if (p !== 0) {
+        const geo = new THREE.BoxGeometry(0.8, 0.6, 0.8);
+        const mat = new THREE.MeshStandardMaterial({ 
+          color: p > 0 ? 0xffffff : 0x222222,
+          metalness: 0.2,
+          roughness: 0.4
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(c - 3.5, 0.3, r - 3.5);
+        threeScene.add(mesh);
+        threePieces.push(mesh);
+      }
+    }
+  }
+  threeRenderer.render(threeScene, threeCamera);
+}
+
+function toggle3DMode() {
+  threeDMode = !threeDMode;
+  if (threeDMode) {
+    DOM.board.style.display = 'none';
+    DOM.threeCanvas.classList.remove('hidden');
+    initThreeScene();
+  } else {
+    DOM.board.style.display = '';
+    DOM.threeCanvas.classList.add('hidden');
+    if (threeRenderer) {
+      threeRenderer.dispose();
+      threeRenderer = null;
+    }
+  }
+  renderBoard();
+}
+
 // Trigger AI move if AI is enabled and it's AI's turn
 function triggerAIMove() {
   if (aiMode === 'off') return;
@@ -348,6 +436,7 @@ function setupEventListeners() {
     }
   });
   DOM.flipBtn.addEventListener('click', flipBoard);
+  DOM.threeDBtn.addEventListener('click', toggle3DMode);
   
   // AI mode selection
   DOM.aiSelect.addEventListener('change', (e) => {
